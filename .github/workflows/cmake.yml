@@ -1,0 +1,194 @@
+name: Build
+
+on: [push]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-linux-gcc:
+    name: Linux (GCC) (Unity)
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: sudo apt -y install libncursesw5-dev libgpm-dev
+
+    - name: Configure CMake
+      shell: bash
+      run: cmake . -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DTV_REDUCE_APP_SIZE=ON -DTV_LIBRARY_UNITY_BUILD=ON
+
+    - name: Build
+      shell: bash
+      run: cmake --build . -j$(nproc)
+
+  build-linux-gcc5:
+    name: Linux (GCC 5)
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo tee --append /etc/apt/sources.list << EOF
+          deb http://us.archive.ubuntu.com/ubuntu/ bionic universe
+        EOF
+        sudo apt -y update
+        sudo apt -y install libncursesw5-dev g++-5
+
+    - name: Configure CMake
+      shell: bash
+      env:
+        CC: gcc-5
+        CXX: g++-5
+      run: cmake . -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+
+    - name: Build
+      shell: bash
+      run: cmake --build . -j$(nproc)
+
+  build-linux-clang:
+    name: Linux (Clang)
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: sudo apt -y install libncursesw5-dev
+
+    - name: Configure CMake
+      shell: bash
+      env:
+        CC: clang
+        CXX: clang++
+      run: cmake . -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DTV_OPTIMIZE_BUILD=OFF
+
+    - name: Build
+      shell: bash
+      run: cmake --build . -j$(nproc)
+
+  build-windows-msvc32:
+    name: Windows (MSVC) (Win32)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure CMake
+      shell: bash
+      run: cmake . -A Win32 -DTV_USE_STATIC_RTL=ON
+
+    - name: Build
+      shell: bash
+      run: cmake --build . --config $BUILD_TYPE -- -p:UseMultiToolTask=true -p:CL_MPcount=$(nproc)
+
+    - name: Upload Examples
+      uses: actions/upload-artifact@v3
+      with:
+        name: examples-x86
+        path: |
+          ${{env.BUILD_TYPE}}/tvdemo.exe
+          ${{env.BUILD_TYPE}}/tvedit.exe
+          ${{env.BUILD_TYPE}}/tvhc.exe
+
+    - name: Upload Library
+      uses: actions/upload-artifact@v3
+      with:
+        name: library-x86
+        path: |
+          ${{env.BUILD_TYPE}}/tvision.lib
+
+  build-windows-msvc64:
+    name: Windows (MSVC) (x64)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure CMake
+      shell: bash
+      run: cmake . -A x64 -DTV_USE_STATIC_RTL=ON
+
+    - name: Build
+      shell: bash
+      run: cmake --build . --config $BUILD_TYPE -- -p:UseMultiToolTask=true -p:CL_MPcount=$(nproc)
+
+    - name: Upload Examples
+      uses: actions/upload-artifact@v3
+      with:
+        name: examples-x64
+        path: |
+          ${{env.BUILD_TYPE}}/tvdemo.exe
+          ${{env.BUILD_TYPE}}/tvedit.exe
+          ${{env.BUILD_TYPE}}/tvhc.exe
+
+    - name: Upload Library
+      uses: actions/upload-artifact@v3
+      with:
+        name: library-x64
+        path: |
+          ${{env.BUILD_TYPE}}/tvision.lib
+
+  build-windows-mingw:
+    name: Windows (MinGW)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure CMake
+      shell: bash
+      run: cmake . -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_CXX_FLAGS="-static" -DTV_OPTIMIZE_BUILD=OFF
+
+    - name: Build
+      shell: bash
+      run: cmake --build . -j$(nproc)
+
+  build-windows-bcc32:
+    name: Windows (BCC32) (DPMI32)
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Build Tools
+      shell: bash
+      run: |
+        curl -LJO "https://github.com/magiblot/tvision/files/5578778/BC45-32.zip"
+        curl -LJO "https://github.com/magiblot/tvision/files/5578815/tasm4-32.zip"
+        unzip BC45-32.zip -d C:/BC45
+        unzip tasm4-32.zip -d C:/tasm
+
+    - name: Build
+      shell: bash
+      run: |
+        export PATH="/c/bc45/bin:/c/tasm/bin:$PATH"
+        cd project
+        /c/bc45/bin/make.exe -DDOS32
+
+    - name: Upload Examples
+      uses: actions/upload-artifact@v3
+      with:
+        name: examples-dos32
+        path: |
+          examples/tvdemo/tvdemo.EXE
+          examples/tvedit/tvedit.EXE
+          examples/tvhc/tvhc.EXE
+
+    - name: Upload Library
+      uses: actions/upload-artifact@v3
+      with:
+        name: library-dos32
+        path: |
+          LIB/TV32.LIB
+
+  build-macos-clang:
+    name: MacOS (Clang)
+    runs-on: macos-12
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Configure CMake
+      shell: bash
+      run: cmake . -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+
+    - name: Build
+      shell: bash
+      run: cmake --build . -j$(sysctl -n hw.logicalcpu)
