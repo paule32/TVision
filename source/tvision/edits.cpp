@@ -31,387 +31,48 @@ TEditor::formatLine(
     TScreenCell *DrawBuf,
     uint P,
     int Width,
-    TAttrPair
+    TAttrPair Colors
     ) { 
-    
+
+    const struct { TColorAttr color; uint end; } ranges[] =
+    {
+        // The attributes for normal text are in the lower half of 'Colors'.
+        // The attributes for text selection are in the upper half.
+        { TColorAttr(Colors), selStart },
+        { TColorAttr(Colors >> 8), selEnd },
+        { TColorAttr(Colors), bufLen }
+    };
+
+    TColorAttr Color;
     TSpan<TScreenCell> Cells(DrawBuf, Width);
-    TStringView chars;
-    TColorAttr  Color;
-    std::string token;
-    
-    int  pos;
-    char Ch;
-    
     int X = 0;
-    Color = EditorTextColor;
-    token = "";
-    
-    while (1) {
-        if (P >= bufLen || X >= Width) break;
-        tokenIsComment = false;
-        chars = bufChars(P);
-        Color = EditorTextColor;
-        Ch    = chars[0];
-        
-        // ----------------------------
-        // parse white space's ...
-        // ----------------------------
-        if (Ch == ' ') {
-            Color = EditorTextColor;
-            while (X < Width) {
-                ::setCell(Cells[X], Ch, Color);
-                X++;
-                P++;
-                chars = bufChars(P);
-                Ch = chars[0];
-                if (Ch != ' ') break;
-            }
-        }
-        
-        // ----------------------------
-        // parse token for Pascal DSL
-        // ----------------------------
-        if (((Ch >= 'A') && (Ch <= 'Z'))
-        ||  ((Ch >= 'a') && (Ch <= 'z'))) {
-            pos = X;
-            ::setCell(Cells[X++], Ch, EditorTextColor);
-            token.push_back(Ch);
-            while (1) {
-                if ((P >= bufLen) || (X >= Width)) break;
-                P++;
-                chars = bufChars(P);
-                Ch = chars[0];
-                if (((Ch >= 'A') && (Ch <= 'Z'))
-                ||  ((Ch >= 'a') && (Ch <= 'z'))
-                ||  ((Ch >= '0') && (Ch <= '9'))
-                ||  (Ch == '_')) {
-                    ::setCell(Cells[X++], Ch, EditorTextColor);
-                    token.push_back(Ch);
-                }   else break;
-            }
-            if (X >= Width) break;
-            
-            // ---------------------------------------------
-            // convert token letter's to lower case letter's
-            // ---------------------------------------------
-            for (char &c : token)
-            c = std::tolower(c);
-            X = pos;
-        
-            auto it = EditorSyntaxToken.find(token);
-            if (it != EditorSyntaxToken.end()) {
-                for (char &c: token) {
-                    if (X >= Width) break;
-                    ::setCell(Cells[X++], c, it->second);
-                }
-            }   else {
-                for (char &c: token) {
-                    if (X >= Width) break;
-                    ::setCell(Cells[X++], c, EditorTextColor);
-                }
-            }
-            token = "";
-        }
-        
-        // ----------------------------
-        // parse comment's ...
-        // ----------------------------
-        if (Ch == '&') {
-            Color = EditorTextColor;
-            ::setCell(Cells[X], '&', Color);
-            X++;
-            P++;
-            chars = bufChars(P);
-            Ch = chars[0];
-            if (P >= bufLen || X >= Width) break;
-            
-            // ----------------------------
-            // dBase comment &&
-            // ----------------------------
-            if (Ch == '&') {
-                tokenIsComment = true;
-                ::setCell(Cells[X-1], Ch, EditorCommentColor);
+    for (int r = 0; r < 3; ++r)
+    {
+        Color = ranges[r].color;
+        while (P < ranges[r].end)
+        {
+            TStringView chars = bufChars(P);
+            char Char = chars[0];
+            if (Char == '\r' || Char == '\n')
+                goto fill;
+            if (Char == '\t') {
                 if (X < Width) {
-                    do  {
-                        ::setCell(Cells[X++], Ch, EditorCommentColor);
-                        P++;
-                        chars = bufChars(P);
-                        Ch = chars[0];
-                        if (Ch == '\r' || Ch == '\n') {
-                            while (X < Width)
-                            ::setCell(Cells[X++], ' ', Color);
-                            P++;
-                            break;
-                        }
-                    }   while (X < Width);
+                    do {
+                        ::setCell(Cells[X++], ' ', Color);
+                    } while (X%8 != 0 && X < Width);
                     ++P;
-                }   else break;
-            }   else
-            if (Ch == '\r' || Ch == '\n') {
-                while (X < Width)
-                ::setCell(Cells[X++], ' ', Color);
-                P++;
-                break;
-            }   else {
-                ::setCell(Cells[X], Ch, Color);
-                X++;
-                P++;
-                if (P >= bufLen || X >= Width) break;
-            }
-        }   else
-        if (Ch == '/') {
-            ::setCell(Cells[X], '/', Color);
-            X++;
-            P++;
-            chars = bufChars(P);
-            Ch = chars[0];
-            if (P >= bufLen || X >= Width) break;
-            
-            // ----------------------------
-            // c++ comment
-            // ----------------------------
-            if (Ch == '/') {
-                tokenIsComment = true;
-                ::setCell(Cells[X-1], Ch, EditorCommentColor);
-                if (X < Width) {
-                    do  {
-                        ::setCell(Cells[X++], Ch, EditorCommentColor);
-                        P++;
-                        chars = bufChars(P);
-                        Ch = chars[0];
-                        if (Ch == '\r' || Ch == '\n') {
-                            while (X < Width)
-                            ::setCell(Cells[X++], ' ', Color);
-                            P++;
-                            break;
-                        }
-                    }   while (X < Width);
-                    ++P;
-                }   else break;
-            }   else
-                
-            // ----------------------------
-            // c comment
-            // ----------------------------
-            if (Ch == '*') {
-                tokenIsComment = true;
-                Color = EditorCommentColor;
-                ::setCell(Cells[X-1], '/', Color);
-                ::setCell(Cells[X  ], '*', Color);
-                X++;
-                P++;
-                while (1) {
-                    if (P >= bufLen || X >= Width) break;
-                    chars = bufChars(P);
-                    Ch = chars[0];
-                    if (Ch == '*') {
-                        ::setCell(Cells[X], '*', Color);
-                        X++;
-                        P++;
-                        if (P >= bufLen || X >= Width) break;
-                        chars = bufChars(P);
-                        Ch = chars[0];
-                        if (Ch == '/') {
-                            ::setCell(Cells[X], Ch, Color);
-                            tokenIsComment = false;
-                            Color = EditorTextColor;
-                            X++;
-                            P++;
-                            break;
-                        }   else
-                        if (Ch == '\r' || Ch == '\n') {
-                            while (X < Width)
-                            ::setCell(Cells[X++], ' ', Color);
-                            P++;
-                            break;
-                        }   else {
-                            ::setCell(Cells[X], Ch, Color);
-                            X++;
-                            P++;
-                            if (P >= bufLen || X >= Width) break;
-                        }
-                    }   else
-                    if (Ch == '\r' || Ch == '\n') {
-                        while (X < Width)
-                        ::setCell(Cells[X++], ' ', EditorCommentColor);
-                        P++;
-                        if (P >= bufLen || X >= Width) break;
-                    }   else {
-                        ::setCell(Cells[X], Ch, EditorCommentColor);
-                        X++;
-                        P++;
-                        if (P >= bufLen || X >= Width) break;
-                    }
-                }
-            }   else {
-                ::setCell(Cells[X], Ch, EditorTextColor);
-                X++;
-                P++;
-                if (P >= bufLen || X >= Width) break;
-            }
-        }   else
-        if (Ch == '(') {
-            ::setCell(Cells[X], '(', EditorTextColor);
-            X++;
-            P++;
-            chars = bufChars(P);
-            Ch = chars[0];
-            if (P >= bufLen || X >= Width) break;
-            
-            // ----------------------------
-            // old style pascal comment
-            // ----------------------------
-            if (Ch == '*') {
-                tokenIsComment = true;
-                Color = EditorCommentColor;
-                ::setCell(Cells[X-1], '(', Color);
-                ::setCell(Cells[X  ], '*', Color);
-                X++;
-                P++;
-                while (1) {
-                    if (P >= bufLen || X >= Width) break;
-                    chars = bufChars(P);
-                    Ch = chars[0];
-                    if (Ch == '*') {
-                        ::setCell(Cells[X], '*', Color);
-                        X++;
-                        P++;
-                        if (P >= bufLen || X >= Width) break;
-                        chars = bufChars(P);
-                        Ch = chars[0];
-                        if (Ch == ')') {
-                            ::setCell(Cells[X], Ch, Color);
-                            tokenIsComment = false;
-                            Color = EditorTextColor;
-                            X++;
-                            P++;
-                            break;
-                        }   else
-                        if (Ch == '\r' || Ch == '\n') {
-                            while (X < Width)
-                            ::setCell(Cells[X++], ' ', Color);
-                            P++;
-                            break;
-                        }   else {
-                            ::setCell(Cells[X], Ch, Color);
-                            X++;
-                            P++;
-                            if (P >= bufLen || X >= Width) break;
-                        }
-                    }   else
-                    if (Ch == '\r' || Ch == '\n') {
-                        while (X < Width)
-                        ::setCell(Cells[X++], ' ', EditorCommentColor);
-                        P++;
-                        if (P >= bufLen || X >= Width) break;
-                    }   else {
-                        ::setCell(Cells[X], Ch, EditorCommentColor);
-                        X++;
-                        P++;
-                        if (P >= bufLen || X >= Width) break;
-                    }
-                }
-            }   else {
-                ::setCell(Cells[X], Ch, EditorTextColor);
-                X++;
-                P++;
-                if (P >= bufLen || X >= Width) break;
-            }
-        }   else
-        if (Ch == '*') {
-            if (tokenIsComment)
-            Color = EditorCommentColor; else
-            Color = EditorTextColor;
-            ::setCell(Cells[X], '*', Color);
-            X++;
-            P++;
-            if (P >= bufLen || X >= Width) break;
-            chars = bufChars(P);
-            Ch = chars[0];
-            
-            // ----------------------------
-            // dBase comment **
-            // ----------------------------
-            if (Ch == '*') {
-                tokenIsComment = true;
-                ::setCell(Cells[X-1], Ch, EditorCommentColor);
-                if (X < Width) {
-                    do  {
-                        ::setCell(Cells[X++], Ch, EditorCommentColor);
-                        P++;
-                        chars = bufChars(P);
-                        Ch = chars[0];
-                        if (Ch == '\r' || Ch == '\n') {
-                            while (X < Width)
-                            ::setCell(Cells[X++], ' ', Color);
-                            P++;
-                            break;
-                        }
-                    }   while (X < Width);
-                    ++P;
-                }   else break;
-            }   else
-                
-            // ----------------------------
-            // end of c comment
-            // ----------------------------
-            if (Ch == '/') {
-                tokenIsComment = false;
-                Color = EditorTextColor;
-                ::setCell(Cells[X], '/', EditorCommentColor);
-                X++;
-                P++;
-                if (P >= bufLen || X >= Width) break;
-            }   else
-                
-            // ----------------------------
-            // end of pascal comment
-            // ----------------------------
-            if (Ch == ')') {
-                tokenIsComment = false;
-                Color = EditorTextColor;
-                ::setCell(Cells[X], ')', EditorCommentColor);
-                X++;
-                P++;
-                if (P >= bufLen || X >= Width) break;
-            }   else {
-                Color = EditorCommentColor;
-                ::setCell(Cells[X], '*', EditorCommentColor);
-                X++;
-                P++;
-                if (P >= bufLen || X >= Width) break;
-            }
-        }   else
-        if (Ch == '\r' || Ch == '\n') {
-            tokenIsComment = false;
-            //Color = EditorTextColor;
-            //::setCell(Cells[X-1], ' ', Color);
-            while (X < Width)
-            ::setCell(Cells[X++], ' ', Color);
-            P++;
-            break;
-        }   else
-        if (Ch == '\t') {
-            if (tokenIsComment)
-            Color = EditorCommentColor; else
-            Color = EditorTextColor;
-            if (X < Width) {
-                do {
-                    ::setCell(Cells[X++], ' ', Color);
-                } while (X%8 != 0 && X < Width);
-                ++P;
-            }   else break;
-        }   else {
-            if (tokenIsComment)
-            Color = EditorCommentColor; else
-            Color = EditorTextColor;
-            if (!formatCell(Cells, (uint&) X, chars, P, Color))
-            break;
+                } else
+                    break;
+            } else
+                if (!formatCell(Cells, (uint&) X, chars, P, Color))
+                    break;
         }
     }
+fill:
     while (X < Width)
-    ::setCell(Cells[X++], ' ', Color);
+        ::setCell(Cells[X++], ' ', Color);
 }
+
 
 uint TEditor::lineEnd( uint P )
 {

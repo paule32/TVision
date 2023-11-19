@@ -184,16 +184,6 @@ class TEditor : public TView
 
 public:
 
-// added: paule32 at: 2023-11-17
-// provide DSL Token & Color for highlight text
-std::map< std::string, TColorAttr > EditorSyntaxToken;
-
-// added: paule32 at: 2023-11-16
-// change the text & background color of TEditor, default is blue on yellow
-// the BIOS color code: 0x1e
-TColorAttr EditorTextColor    = 0x1e;  // blue on yellow
-TColorAttr EditorCommentColor = 0x30;  // green on black
-
     friend void genRefs();
 
     TEditor( const TRect&, TScrollBar *, TScrollBar *, TIndicator *, uint ) noexcept;
@@ -238,7 +228,11 @@ TColorAttr EditorCommentColor = 0x30;  // green on black
     void doUpdate();
     void doSearchReplace();
     void drawLines( int, int, uint );
-    void formatLine(TScreenCell *, uint, int, TAttrPair );
+
+// ]1] changed by paule32: 2023-11-19
+    virtual void formatLine(TScreenCell *, uint, int, TAttrPair );
+// [0]
+
     void find();
     uint getMousePtr( TPoint );
     Boolean hasSelection();
