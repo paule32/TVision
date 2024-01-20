@@ -14,47 +14,18 @@
  *
  */
 
-#if !defined( __BORLANDC__ )
-#define __FLAT__
-
 #if !defined( _WIN32 )
 #define __cdecl
 #define __stdcall
 #define _TV_UNIX
 #endif
 
-#endif
-
-#if defined( __FLAT__ )
 #define _NEAR
 #define _FAR
-#else
-#define _NEAR near
-#endif
 
-#if defined( __BORLANDC__ )
-#pragma option -Vo-
-#endif
-#if defined( __BCOPT__ ) && !defined (__FLAT__)
-#pragma option -po-
-#endif
-#if defined( _MSC_VER )
-#pragma warning(push)
-#pragma warning(disable: 4250)
-#endif
 #if defined( __clang__ )
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Woverloaded-virtual"
-#endif
-
-#if !defined( __FLAT__ )
-#if !defined ( __LARGE__ )
-#error TV needs the large memory model
-#endif
-#endif
-
-#if defined( _RTLDLL )
-#error TV must use the RTL in static form only
 #endif
 
 #define _TV_VERSION 0x0200

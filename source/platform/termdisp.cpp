@@ -1,4 +1,6 @@
 #define Uses_TScreen
+#define Uses_TDisplay
+
 #include <tvision/tv.h>
 
 #include <internal/termdisp.h>
